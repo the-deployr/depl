@@ -1,5 +1,5 @@
 Flask
 Flask-SocketIO
 eventlet
-pyaudio
+# pyaudio
 google-generativeai
