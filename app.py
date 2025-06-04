@@ -5,8 +5,8 @@ import traceback
 import threading
 import base64
 import json
-from google import genai
-from google.genai import types
+import google.generativeai as genai
+from google.generativeai import types
 
 try:
     import pyaudio
