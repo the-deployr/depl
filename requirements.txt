@@ -2,4 +2,5 @@ Flask
 Flask-SocketIO
 eventlet
 gunicorn
-google-generativeai --no-deps
+google-generativeai
+google
