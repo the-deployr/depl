@@ -3,4 +3,3 @@ Flask-SocketIO
 eventlet
 gunicorn
 google-generativeai
-google
