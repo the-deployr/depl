@@ -51,7 +51,7 @@ VOICES = {
     'female': 'Leda'
 }
 
-client = genai.Client(
+client = genai.configure(
     http_options={"api_version": "v1beta"},
     api_key=GEMINI_API_KEY,
 )
