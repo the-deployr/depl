@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Speech Translator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #4a5568;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: #718096;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+
+        .language-selector, .gender-selector {
+            margin-bottom: 2rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        select {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 140px;
+        }
+
+        .start-btn {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+        }
+
+        .start-btn:hover {
+            background: linear-gradient(135deg, #38a169, #2f855a);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(72, 187, 120, 0.3);
+        }
+
+        .stop-btn {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+            color: white;
+        }
+
+        .stop-btn:hover {
+            background: linear-gradient(135deg, #e53e3e, #c53030);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(245, 101, 101, 0.3);
+        }
+
+        .status {
+            background: #f7fafc;
+            border-left: 4px solid #4299e1;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            text-align: left;
+        }
+
+        .translation-box {
+            background: #edf2f7;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-left: 4px solid #48bb78;
+        }
+
+        .translation-text {
+            font-size: 1.2rem;
+            color: #2d3748;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+
+        .error {
+            background: #fed7d7;
+            border-left-color: #f56565;
+            color: #c53030;
+        }
+
+        .success {
+            background: #c6f6d5;
+            border-left-color: #48bb78;
+            color: #2f855a;
+        }
+
+        .microphone-icon {
+            display: inline-block;
+            margin-right: 0.5rem;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .recording-indicator {
+            display: none;
+            background: #48bb78;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            margin: 1rem 0;
+            font-weight: 600;
+        }
+
+        .recording-indicator.active {
+            display: block;
+        }
+
+        .instructions {
+            background: #e6fffa;
+            border: 1px solid #81e6d9;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            text-align: left;
+        }
+
+        .instructions h3 {
+            color: #234e52;
+            margin-bottom: 0.5rem;
+        }
+
+        .instructions ul {
+            color: #2c7a7b;
+            padding-left: 1.5rem;
+        }
+
+        .instructions li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Real-Time Speech Translator</h1>
+        <p class="subtitle">Speak in any language and get instant translation to your chosen language</p>
+        
+        <div class="language-selector">
+            <label for="targetLanguage">Select Your Target Language (Mother Tongue):</label>
+            <select id="targetLanguage">
+                {% for language in languages %}
+                <option value="{{ language }}">{{ language }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="gender-selector">
+            <label for="gender">Select Voice Gender:</label>
+            <select id="gender">
+                <option value="female">Female Voice (Leda)</option>
+                <option value="male">Male Voice (Fenrir)</option>
+            </select>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="start-btn">
+                <span class="microphone-icon">🎤</span>
+                Start Translation
+            </button>
+            <button id="stopBtn" class="stop-btn" style="display: none;">
+                <span>⏹️</span>
+                Stop Translation
+            </button>
+        </div>
+
+        <div id="recordingIndicator" class="recording-indicator">
+            <span class="microphone-icon">🎤</span>
+            Listening and translating...
+        </div>
+
+        <div id="statusBox" class="status">
+            <strong>Status:</strong> Select a language and voice gender, then click "Start Translation" to begin.
+        </div>
+
+        <div class="translation-box">
+            <div id="translationText" class="translation-text">
+                Your translations will appear here...
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3>How to use:</h3>
+            <ul>
+                <li>Select your preferred target language from the dropdown</li>
+                <li>Choose your preferred voice gender (Male: Fenrir, Female: Leda)</li>
+                <li>Click "Start Translation" to begin</li>
+                <li>Speak clearly in any language</li>
+                <li>The system will automatically detect your language and translate it</li>
+                <li>You'll see the translation text and hear it spoken aloud in your chosen voice</li>
+                <li>Click "Stop Translation" when you're done</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const targetLanguage = document.getElementById('targetLanguage');
+        const gender = document.getElementById('gender');
+        const statusBox = document.getElementById('statusBox');
+        const translationText = document.getElementById('translationText');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+
+        let isTranslating = false;
+
+        // Socket event listeners
+        socket.on('connect', function() {
+            updateStatus('Connected to server. Select a language to start.', 'success');
+        });
+
+        socket.on('disconnect', function() {
+            updateStatus('Disconnected from server.', 'error');
+            stopTranslation();
+        });
+
+        socket.on('status', function(data) {
+            updateStatus(data.message, 'success');
+        });
+
+        socket.on('error', function(data) {
+            updateStatus('Error: ' + data.message, 'error');
+            stopTranslation();
+        });
+
+        socket.on('translation', function(data) {
+            translationText.innerHTML = `<strong>${data.language} Translation:</strong><br>${data.text}`;
+        });
+
+        // Button event listeners
+        startBtn.addEventListener('click', function() {
+            const selectedLanguage = targetLanguage.value;
+            const selectedGender = gender.value;
+            
+            if (!selectedLanguage) {
+                updateStatus('Please select a target language.', 'error');
+                return;
+            }
+
+            if (!selectedGender) {
+                updateStatus('Please select a voice gender.', 'error');
+                return;
+            }
+
+            socket.emit('start_translation', { 
+                language: selectedLanguage,
+                gender: selectedGender 
+            });
+            startTranslation();
+        });
+
+        stopBtn.addEventListener('click', function() {
+            socket.emit('stop_translation');
+            stopTranslation();
+        });
+
+        function startTranslation() {
+            isTranslating = true;
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+            recordingIndicator.classList.add('active');
+            targetLanguage.disabled = true;
+            gender.disabled = true;
+            const voiceType = gender.value === 'male' ? 'Male Voice (Fenrir)' : 'Female Voice (Leda)';
+            updateStatus(`Starting translation to ${targetLanguage.value} with ${voiceType}...`, 'success');
+        }
+
+        function stopTranslation() {
+            isTranslating = false;
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'none';
+            recordingIndicator.classList.remove('active');
+            targetLanguage.disabled = false;
+            gender.disabled = false;
+            updateStatus('Translation stopped. Select language and voice to start again.', '');
+        }
+
+        function updateStatus(message, type = '') {
+            statusBox.innerHTML = `<strong>Status:</strong> ${message}`;
+            statusBox.className = 'status';
+            if (type) {
+                statusBox.classList.add(type);
+            }
+        }
+
+        // Handle page visibility change
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && isTranslating) {
+                socket.emit('stop_translation');
+                stopTranslation();
+                updateStatus('Translation stopped due to page being hidden.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
