@@ -207,7 +207,7 @@
     <div class="container">
         <h1>🎤 Real-Time Speech Translator</h1>
         <p class="subtitle">Speak in any language and get instant translation to your chosen language</p>
-        
+
         <div class="language-selector">
             <label for="targetLanguage">Select Your Target Language (Mother Tongue):</label>
             <select id="targetLanguage">
@@ -251,119 +251,109 @@
             </div>
         </div>
 
-        <div class="instructions">
-            <h3>How to use:</h3>
-            <ul>
-                <li>Select your preferred target language from the dropdown</li>
-                <li>Choose your preferred voice gender (Male: Fenrir, Female: Leda)</li>
-                <li>Click "Start Translation" to begin</li>
-                <li>Speak clearly in any language</li>
-                <li>The system will automatically detect your language and translate it</li>
-                <li>You'll see the translation text and hear it spoken aloud in your chosen voice</li>
-                <li>Click "Stop Translation" when you're done</li>
-            </ul>
-        </div>
-    </div>
+        <script>
+            const socket = io();
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const targetLanguage = document.getElementById('targetLanguage');
+            const gender = document.getElementById('gender');
+            const statusBox = document.getElementById('statusBox');
+            const translationText = document.getElementById('translationText');
+            const recordingIndicator = document.getElementById('recordingIndicator');
 
-    <script>
-        const socket = io();
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const targetLanguage = document.getElementById('targetLanguage');
-        const gender = document.getElementById('gender');
-        const statusBox = document.getElementById('statusBox');
-        const translationText = document.getElementById('translationText');
-        const recordingIndicator = document.getElementById('recordingIndicator');
+            let mediaRecorder;
+            let isTranslating = false;
 
-        let isTranslating = false;
-
-        // Socket event listeners
-        socket.on('connect', function() {
-            updateStatus('Connected to server. Select a language to start.', 'success');
-        });
-
-        socket.on('disconnect', function() {
-            updateStatus('Disconnected from server.', 'error');
-            stopTranslation();
-        });
-
-        socket.on('status', function(data) {
-            updateStatus(data.message, 'success');
-        });
-
-        socket.on('error', function(data) {
-            updateStatus('Error: ' + data.message, 'error');
-            stopTranslation();
-        });
-
-        socket.on('translation', function(data) {
-            translationText.innerHTML = `<strong>${data.language} Translation:</strong><br>${data.text}`;
-        });
-
-        // Button event listeners
-        startBtn.addEventListener('click', function() {
-            const selectedLanguage = targetLanguage.value;
-            const selectedGender = gender.value;
-            
-            if (!selectedLanguage) {
-                updateStatus('Please select a target language.', 'error');
-                return;
-            }
-
-            if (!selectedGender) {
-                updateStatus('Please select a voice gender.', 'error');
-                return;
-            }
-
-            socket.emit('start_translation', { 
-                language: selectedLanguage,
-                gender: selectedGender 
+            socket.on('connect', function() {
+                updateStatus('Connected to server. Select a language to start.', 'success');
             });
-            startTranslation();
-        });
 
-        stopBtn.addEventListener('click', function() {
-            socket.emit('stop_translation');
-            stopTranslation();
-        });
-
-        function startTranslation() {
-            isTranslating = true;
-            startBtn.style.display = 'none';
-            stopBtn.style.display = 'inline-block';
-            recordingIndicator.classList.add('active');
-            targetLanguage.disabled = true;
-            gender.disabled = true;
-            const voiceType = gender.value === 'male' ? 'Male Voice (Fenrir)' : 'Female Voice (Leda)';
-            updateStatus(`Starting translation to ${targetLanguage.value} with ${voiceType}...`, 'success');
-        }
-
-        function stopTranslation() {
-            isTranslating = false;
-            startBtn.style.display = 'inline-block';
-            stopBtn.style.display = 'none';
-            recordingIndicator.classList.remove('active');
-            targetLanguage.disabled = false;
-            gender.disabled = false;
-            updateStatus('Translation stopped. Select language and voice to start again.', '');
-        }
-
-        function updateStatus(message, type = '') {
-            statusBox.innerHTML = `<strong>Status:</strong> ${message}`;
-            statusBox.className = 'status';
-            if (type) {
-                statusBox.classList.add(type);
-            }
-        }
-
-        // Handle page visibility change
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden && isTranslating) {
-                socket.emit('stop_translation');
+            socket.on('disconnect', function() {
+                updateStatus('Disconnected from server.', 'error');
                 stopTranslation();
-                updateStatus('Translation stopped due to page being hidden.', 'error');
+            });
+
+            socket.on('status', function(data) {
+                updateStatus(data.message, 'success');
+            });
+
+            socket.on('error', function(data) {
+                updateStatus('Error: ' + data.message, 'error');
+                stopTranslation();
+            });
+
+            socket.on('translation', function(data) {
+                translationText.innerHTML = `<strong>${data.language} Translation:</strong><br>${data.text}`;
+            });
+
+            startBtn.addEventListener('click', async function() {
+                const selectedLanguage = targetLanguage.value;
+                const selectedGender = gender.value;
+
+                if (!selectedLanguage || !selectedGender) {
+                    updateStatus('Please select a language and voice gender.', 'error');
+                    return;
+                }
+
+                socket.emit('start_translation', {
+                    language: selectedLanguage,
+                    gender: selectedGender
+                });
+
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.start(250); // send every 250ms
+
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data.size > 0 && isTranslating) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const base64Audio = reader.result.split(',')[1];
+                            socket.emit('audio_chunk', { audio: base64Audio });
+                        };
+                        reader.readAsDataURL(e.data);
+                    }
+                };
+
+                startTranslation();
+            });
+
+            stopBtn.addEventListener('click', function() {
+                stopTranslation();
+                socket.emit('stop_translation');
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            });
+
+            function startTranslation() {
+                isTranslating = true;
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+                recordingIndicator.classList.add('active');
+                targetLanguage.disabled = true;
+                gender.disabled = true;
+                updateStatus(`Listening and translating to ${targetLanguage.value}...`, 'success');
             }
-        });
-    </script>
+
+            function stopTranslation() {
+                isTranslating = false;
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+                recordingIndicator.classList.remove('active');
+                targetLanguage.disabled = false;
+                gender.disabled = false;
+                updateStatus('Translation stopped.', '');
+            }
+
+            function updateStatus(message, type = '') {
+                statusBox.innerHTML = `<strong>Status:</strong> ${message}`;
+                statusBox.className = 'status';
+                if (type) {
+                    statusBox.classList.add(type);
+                }
+            }
+        </script>
+    </div>
 </body>
 </html>
