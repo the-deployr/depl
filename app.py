@@ -51,10 +51,8 @@ VOICES = {
     'female': 'Leda'
 }
 
-client = genai.configure(
-    http_options={"api_version": "v1beta"},
-    api_key=GEMINI_API_KEY,
-)
+genai.configure(api_key=GEMINI_API_KEY)
+
 
 class WebSpeechTranslator:
     def __init__(self, target_language, gender, socket_id):
@@ -160,7 +158,7 @@ class WebSpeechTranslator:
 
     async def run(self):
         try:
-            async with client.aio.live.connect(model=MODEL, config=self.get_config()) as session:
+            async with genai.aio.live.connect(model=MODEL, config=self.get_config()) as session:
                 self.session = session
                 self.audio_in_queue = asyncio.Queue() if pya else None
                 self.out_queue = asyncio.Queue(maxsize=5) if pya else None
